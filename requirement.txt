@@ -1,5 +1,10 @@
 streamlit
 tensorflow
+keras
 pandas
 numpy
 scikit-learn
+shap
+matplotlib
+seaborn
+scipy
