@@ -1,4 +1,5 @@
 import streamlit as st
+import random
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv1D, Dropout, Flatten, Dense, Activation
