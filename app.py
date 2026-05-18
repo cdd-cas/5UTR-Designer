@@ -1,18 +1,17 @@
 import streamlit as st
-import numpy as np
-import pandas as pd
-import random
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv1D
-import pickle
-
+from tensorflow.keras.layers import Conv1D, Dropout, Flatten, Dense, Activation
+import numpy as np
+import pandas as pd
+import pickle 
 
 # ==========================================
-# 1. 模型初始化与加载 (复用你之前的架构)
+# 1. 核心模型与数据加载模块 (完美对齐版)
 # ==========================================
-@st.cache_resource  # 缓存模型，避免每次点击都重新加载
-def init_model():
+@st.cache_resource
+def load_core_assets():
+    # 初始化模型结构 (严格带有 name 暗号)
     model = Sequential()
     model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
     model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
@@ -26,17 +25,30 @@ def init_model():
     model.add(Dense(1, name='dense2'))
     model.add(Activation('linear', name='linear'))
     model.compile(loss='mean_squared_error', optimizer='adam')
-    return model
 
-model = init_model()
-    # 请确保同目录下有你保存的权重文件和标准化文件
-try:
+    # 加载权重
+    try:
         model.load_weights('shap_model.weights.h5')
-        scaler = pickle.load(open('scaler.pkl', 'rb'))
-except Exception as e:
-        st.warning(f"未能加载模型权重或Scaler，当前使用未训练的初始化权重演示: {e}")
+    except Exception as e:
+        print(f"权重加载异常: {e}")
+
+    # 加载 Scaler
+    try:
+        with open('scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+    except Exception as e:
+        print(f"Scaler加载异常: {e}")
         scaler = None
+        
     return model, scaler
+
+# 统一执行加载
+model, scaler = load_core_assets()
+
+# ==========================================
+# 2. 网页前端 UI 模块 (保留你原来的代码)
+# ==========================================
+# (这里紧接着你原来的 st.title('🧬 5\'UTR 表达强度逆向设计系统') 以及后续的网页代码...)
 
 
 # 辅助函数：序列转 One-hot
