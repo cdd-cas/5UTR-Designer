@@ -30,10 +30,10 @@ def init_model():
 
 model = init_model()
     # 请确保同目录下有你保存的权重文件和标准化文件
-    try:
+try:
         model.load_weights('shap_model.weights.h5')
         scaler = pickle.load(open('scaler.pkl', 'rb'))
-    except Exception as e:
+except Exception as e:
         st.warning(f"未能加载模型权重或Scaler，当前使用未训练的初始化权重演示: {e}")
         scaler = None
     return model, scaler
