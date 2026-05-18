@@ -12,18 +12,20 @@ import pickle
 # 1. 模型初始化与加载 (复用你之前的架构)
 # ==========================================
 @st.cache_resource  # 缓存模型，避免每次点击都重新加载
-def load_surrogate_model():
-    def init_model():
+def init_model():
         model = Sequential()
-        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
-        model.add(Dropout(0.3))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
-        model.add(Dropout(0.3))
-        model.add(Flatten())
-        model.add(Dense(256, activation='relu'))
-        model.add(Dropout(0.3))
-        model.add(Dense(1, activation='linear'))
+        # 这里严格加上了你训练时的 name 暗号
+        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
+        model.add(Dropout(0.3, name='dropout1'))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
+        model.add(Dropout(0.3, name='dropout2'))
+        model.add(Flatten(name='flatten'))
+        model.add(Dense(256, name='dense'))
+        model.add(Activation('relu', name='relu'))
+        model.add(Dropout(0.3, name='dropout3'))
+        model.add(Dense(1, name='dense2'))
+        model.add(Activation('linear', name='linear'))
         model.compile(loss='mean_squared_error', optimizer='adam')
         return model
 
