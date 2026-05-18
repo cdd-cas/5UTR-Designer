@@ -120,9 +120,6 @@ st.title("🧬 5'UTR 表达强度逆向设计系统")
 st.markdown(
     "基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法（如 bS1 结合 Motif）。")
 
-# 加载模型
-model, scaler = load_surrogate_model()
-
 st.divider()
 
 # 用户输入区域
