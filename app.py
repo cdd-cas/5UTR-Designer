@@ -13,23 +13,22 @@ import pickle
 # ==========================================
 @st.cache_resource  # 缓存模型，避免每次点击都重新加载
 def init_model():
-        model = Sequential()
-        # 这里严格加上了你训练时的 name 暗号
-        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
-        model.add(Dropout(0.3, name='dropout1'))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
-        model.add(Dropout(0.3, name='dropout2'))
-        model.add(Flatten(name='flatten'))
-        model.add(Dense(256, name='dense'))
-        model.add(Activation('relu', name='relu'))
-        model.add(Dropout(0.3, name='dropout3'))
-        model.add(Dense(1, name='dense2'))
-        model.add(Activation('linear', name='linear'))
-        model.compile(loss='mean_squared_error', optimizer='adam')
-        return model
+    model = Sequential()
+    model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
+    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
+    model.add(Dropout(0.3, name='dropout1'))
+    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
+    model.add(Dropout(0.3, name='dropout2'))
+    model.add(Flatten(name='flatten'))
+    model.add(Dense(256, name='dense'))
+    model.add(Activation('relu', name='relu'))
+    model.add(Dropout(0.3, name='dropout3'))
+    model.add(Dense(1, name='dense2'))
+    model.add(Activation('linear', name='linear'))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    return model
 
-    model = init_model()
+model = init_model()
     # 请确保同目录下有你保存的权重文件和标准化文件
     try:
         model.load_weights('shap_model.weights.h5')
