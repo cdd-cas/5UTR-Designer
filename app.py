@@ -2,62 +2,57 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import random
-import tensorflow as tf
+import os
+import shutil
+import h5py
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv1D, Activation
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv1D
 import pickle
 
 # ==========================================
-# 1. 模型初始化与加载 (包含强行唤醒与双重加载保险)
+# 🔥 核心黑科技：Windows转Linux路径拦截清洗器
+# ==========================================
+def fix_windows_h5_bug(original_file):
+    fixed_file = "linux_fixed_" + original_file
+    # 如果还没有修复过，就执行修复
+    if not os.path.exists(fixed_file):
+        shutil.copy(original_file, fixed_file)
+        with h5py.File(fixed_file, 'r+') as f:
+            # 遍历里面所有的层名字，把 Windows 的 \ 掰正为 Linux 的 /
+            keys = list(f.keys())
+            for k in keys:
+                if '\\' in k:
+                    new_k = k.replace('\\', '/')
+                    f.move(k, new_k)
+    return fixed_file
+
+# ==========================================
+# 1. 纯净模型加载 (拦截修复后加载)
 # ==========================================
 @st.cache_resource
 def load_surrogate_model():
-    def init_model():
-        model = Sequential()
-        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
-        model.add(Dropout(0.3))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
-        model.add(Dropout(0.3))
-        model.add(Flatten())
-        model.add(Dense(256, activation='relu'))
-        model.add(Dropout(0.3))
-        model.add(Dense(1, activation='linear'))
-        model.compile(loss='mean_squared_error', optimizer='adam')
-        return model
+    model = Sequential()
+    model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3))
+    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
+    model.add(Dropout(0.3))
+    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
+    model.add(Dropout(0.3))
+    model.add(Flatten())
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.3))
+    model.add(Dense(1, activation='linear'))
+    model.compile(loss='mean_squared_error', optimizer='adam')
 
-    model = init_model()
-    weight_error = None
-    scaler_error = None
-
-    # 🔥 终极绝招：塞入一条假数据，强制打醒 TensorFlow，逼它建好所有神经元变量
-    try:
-        dummy_input = np.zeros((1, 8, 4))
-        model.predict(dummy_input, verbose=0)
-    except:
-        pass
-
-    # 现在空箱子已经准备完毕，开始安全加载
-    try:
-        # 第一套方案：按常规权重加载
-        model.load_weights('shap_model.weights.h5')
-    except Exception as e1:
-        try:
-            # 🔥 双保险方案：如果你本地不小心存成了“全尺寸模型”，这里强行把里面的权重抽出来塞进去
-            temp_model = tf.keras.models.load_model('shap_model.weights.h5', compile=False)
-            model.set_weights(temp_model.get_weights())
-        except Exception as e2:
-            weight_error = f"常规加载失败: {e1} | 备用加载也失败: {e2}"
-
-    # 加载 Scaler
-    try:
-        with open('scaler.pkl', 'rb') as f:
-            scaler = pickle.load(f)
-    except Exception as e:
-        scaler_error = str(e)
-        scaler = None
-
-    return model, scaler, weight_error, scaler_error
+    # 1. 触发拦截器，瞬间洗掉反斜杠 Bug
+    fixed_weight_path = fix_windows_h5_bug('shap_model.weights.h5')
+    
+    # 2. 完美加载洗干净的权重
+    model.load_weights(fixed_weight_path)
+    
+    with open('scaler.pkl', 'rb') as f:
+        scaler = pickle.load(f)
+        
+    return model, scaler
 
 # ==========================================
 # 2. 辅助函数
@@ -68,7 +63,7 @@ def seq_to_onehot(seq):
     return vector.reshape(1, len(seq), 4)
 
 # ==========================================
-# 3. 核心算法：逆向序列生成引擎 (精准靶向爬山算法)
+# 3. 核心算法：逆向序列生成引擎 (精准寻优)
 # ==========================================
 def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations=500):
     bases = ['a', 'c', 'g', 't']
@@ -110,16 +105,9 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
 # ==========================================
 st.set_page_config(page_title="5'UTR 理性设计平台", layout="centered")
 st.title("🧬 5'UTR 表达强度逆向设计系统")
-st.markdown("基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法（如 bS1 结合 Motif）。")
+st.markdown("基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法。")
 
-# 载入模型
-model, scaler, w_err, s_err = load_surrogate_model()
-
-# 强制红框报警系统
-if w_err:
-    st.error(f"❌ 严重错误：无法加载模型权重！预测结果将完全随机！\n\n报错详情: {w_err}")
-if s_err:
-    st.error(f"❌ 严重错误：无法加载数据标准化器！\n\n报错详情: {s_err}")
+model, scaler = load_surrogate_model()
 
 st.divider()
 
@@ -136,7 +124,6 @@ if generate_btn:
         final_seq, final_pred, history_df = reverse_engineer_sequence(target_expr, model, scaler, seq_len=8, iterations=iterations)
         
         st.success("序列生成完毕！")
-        
         st.subheader("🏆 最优生成结果")
         st.metric(label="生成的核苷酸序列", value=final_seq)
         
