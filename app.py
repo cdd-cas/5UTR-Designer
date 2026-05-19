@@ -14,11 +14,9 @@ import pickle
 # ==========================================
 def fix_windows_h5_bug(original_file):
     fixed_file = "linux_fixed_" + original_file
-    # 如果还没有修复过，就执行修复
     if not os.path.exists(fixed_file):
         shutil.copy(original_file, fixed_file)
         with h5py.File(fixed_file, 'r+') as f:
-            # 遍历里面所有的层名字，把 Windows 的 \ 掰正为 Linux 的 /
             keys = list(f.keys())
             for k in keys:
                 if '\\' in k:
@@ -27,7 +25,7 @@ def fix_windows_h5_bug(original_file):
     return fixed_file
 
 # ==========================================
-# 1. 纯净模型加载 (拦截修复后加载)
+# 1. 纯净模型加载 
 # ==========================================
 @st.cache_resource
 def load_surrogate_model():
@@ -43,10 +41,8 @@ def load_surrogate_model():
     model.add(Dense(1, activation='linear'))
     model.compile(loss='mean_squared_error', optimizer='adam')
 
-    # 1. 触发拦截器，瞬间洗掉反斜杠 Bug
+    # 洗掉 Windows 带来的反斜杠 Bug
     fixed_weight_path = fix_windows_h5_bug('shap_model.weights.h5')
-    
-    # 2. 完美加载洗干净的权重
     model.load_weights(fixed_weight_path)
     
     with open('scaler.pkl', 'rb') as f:
@@ -54,16 +50,13 @@ def load_surrogate_model():
         
     return model, scaler
 
-# ==========================================
-# 2. 辅助函数
-# ==========================================
 def seq_to_onehot(seq):
     nuc_d = {'a': [1, 0, 0, 0], 'c': [0, 1, 0, 0], 'g': [0, 0, 1, 0], 't': [0, 0, 0, 1]}
     vector = np.array([nuc_d.get(base, [0, 0, 0, 0]) for base in seq.lower()])
     return vector.reshape(1, len(seq), 4)
 
 # ==========================================
-# 3. 核心算法：逆向序列生成引擎 (精准寻优)
+# 2. 核心算法：逆向序列生成引擎 (完美阶梯画图版)
 # ==========================================
 def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations=500):
     bases = ['a', 'c', 'g', 't']
@@ -78,6 +71,8 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
 
     current_pred = get_pred(current_seq)
     current_loss = abs(current_pred - target_value)
+    
+    # 记录初始状态 (第 0 代)
     history = [{'iteration': 0, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss}]
     progress_bar = st.progress(0)
 
@@ -89,33 +84,37 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
         new_pred = get_pred(new_seq)
         new_loss = abs(new_pred - target_value)
 
-        # 1. 适者生存：如果突变更好，就更新当前的最优序列
+        # 适者生存：如果突变产生的分数更接近目标，就更新当前最佳血统
         if new_loss < current_loss:
             current_seq = new_seq
             current_pred = new_pred
             current_loss = new_loss
-            if current_loss < 0.01:
-                # 如果已经达到了极其完美的精度，可以提前跳出
-                history.append({'iteration': i + 1, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss})
-                break
+
+        # 🌟 核心修正：无论刚才的突变是成功还是失败，都把【当前这一代存活下来的最优战绩】记录下来！
+        # 这样才能画出中间平稳、偶尔下降的漂亮阶梯图
+        history.append({'iteration': i + 1, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss})
+        
+        # 如果达到了极度精确的偏差，提前结束寻优
+        if current_loss < 0.01:
+            break
+            
         progress_bar.progress((i + 1) / iterations)
         
     return current_seq.upper(), current_pred, pd.DataFrame(history)
 
 # ==========================================
-# 4. 网页 UI 设计 (Streamlit)
+# 3. 网页 UI 设计 (Streamlit)
 # ==========================================
 st.set_page_config(page_title="5'UTR 理性设计平台", layout="centered")
 st.title("🧬 5'UTR 表达强度逆向设计系统")
 st.markdown("基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法。")
 
 model, scaler = load_surrogate_model()
-
 st.divider()
 
 col1, col2 = st.columns(2)
 with col1:
-    target_expr = st.number_input("🎯 设定预期的表达强度 (Target Value)", value=100000.0, step=1000.0)
+    target_expr = st.number_input("🎯 设定预期的表达强度 (Target Value)", value=150000.0, step=1000.0)
 with col2:
     iterations = st.slider("🔄 进化迭代次数 (Iterations)", min_value=100, max_value=2000, value=500, step=100)
 
@@ -134,6 +133,7 @@ if generate_btn:
         c2.metric(label="目标表达值", value=f"{target_expr:.4f}")
         
         st.subheader("📈 序列进化轨迹")
+        # 强制绘制以 iteration 为横坐标的折线图
         st.line_chart(history_df.set_index('iteration')['predicted_value'])
         
         with st.expander("查看详细突变历史"):
