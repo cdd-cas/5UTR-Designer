@@ -89,12 +89,14 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
         new_pred = get_pred(new_seq)
         new_loss = abs(new_pred - target_value)
 
+        # 1. 适者生存：如果突变更好，就更新当前的最优序列
         if new_loss < current_loss:
             current_seq = new_seq
             current_pred = new_pred
             current_loss = new_loss
-            history.append({'iteration': i + 1, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss})
             if current_loss < 0.01:
+                # 如果已经达到了极其完美的精度，可以提前跳出
+                history.append({'iteration': i + 1, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss})
                 break
         progress_bar.progress((i + 1) / iterations)
         
