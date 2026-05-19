@@ -1,9 +1,5 @@
 streamlit
-tensorflow-cpu
+tensorflow
 pandas
 numpy
 scikit-learn
-shap
-matplotlib
-seaborn
-scipy
