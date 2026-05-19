@@ -4,12 +4,9 @@ import pandas as pd
 import random
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv1D
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv1D
 import pickle
 
-# ==========================================
-# 1. 模型初始化与加载 (绝对纯净原始版，无自定义name)
-# ==========================================
 @st.cache_resource
 def load_surrogate_model():
     def init_model():
@@ -27,32 +24,29 @@ def load_surrogate_model():
         return model
 
     model = init_model()
+    weight_error = None
+    scaler_error = None
     
-    # 尝试加载权重
+    # 强制捕获并返回错误信息
     try:
         model.load_weights('shap_model.weights.h5')
     except Exception as e:
-        print(f"权重加载错误: {e}")
+        weight_error = str(e)
         
-    # 尝试加载 Scaler
     try:
         with open('scaler.pkl', 'rb') as f:
             scaler = pickle.load(f)
     except Exception as e:
-        print(f"Scaler加载错误: {e}")
+        scaler_error = str(e)
         scaler = None
         
-    return model, scaler
+    return model, scaler, weight_error, scaler_error
 
-# 辅助函数：序列转 One-hot
 def seq_to_onehot(seq):
     nuc_d = {'a': [1, 0, 0, 0], 'c': [0, 1, 0, 0], 'g': [0, 0, 1, 0], 't': [0, 0, 0, 1]}
     vector = np.array([nuc_d.get(base, [0, 0, 0, 0]) for base in seq.lower()])
     return vector.reshape(1, len(seq), 4)
 
-# ==========================================
-# 2. 核心算法：逆向序列生成引擎 (精准靶向爬山算法)
-# ==========================================
 def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations=500):
     bases = ['a', 'c', 'g', 't']
     current_seq = "".join(random.choices(bases, k=seq_len))
@@ -67,14 +61,12 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
     current_pred = get_pred(current_seq)
     current_loss = abs(current_pred - target_value)
     history = [{'iteration': 0, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss}]
-
     progress_bar = st.progress(0)
 
     for i in range(iterations):
         mut_pos = random.randint(0, seq_len - 1)
         new_base = random.choice([b for b in bases if b != current_seq[mut_pos]])
         new_seq = current_seq[:mut_pos] + new_base + current_seq[mut_pos + 1:]
-
         new_pred = get_pred(new_seq)
         new_loss = abs(new_pred - target_value)
 
@@ -83,27 +75,22 @@ def reverse_engineer_sequence(target_value, model, scaler, seq_len=8, iterations
             current_pred = new_pred
             current_loss = new_loss
             history.append({'iteration': i + 1, 'sequence': current_seq.upper(), 'predicted_value': current_pred, 'loss': current_loss})
-
             if current_loss < 0.01:
                 break
-
         progress_bar.progress((i + 1) / iterations)
-
     return current_seq.upper(), current_pred, pd.DataFrame(history)
 
-# ==========================================
-# 3. 网页 UI 设计 (Streamlit)
-# ==========================================
+# ================= UI =================
 st.set_page_config(page_title="5'UTR 理性设计平台", layout="centered")
-
 st.title("🧬 5'UTR 表达强度逆向设计系统")
-st.markdown("基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法（如 bS1 结合 Motif）。")
 
-model, scaler = load_surrogate_model()
+model, scaler, w_err, s_err = load_surrogate_model()
 
-# 错误提示警告框 (如果云端找不到文件，会变红提示)
-if scaler is None:
-    st.error("❌ 警告：系统未能成功读取 scaler.pkl 或 shap_model.weights.h5。请确保这两个文件已成功上传至 GitHub！")
+# 强制红框报警系统
+if w_err:
+    st.error(f"❌ 严重错误：无法加载模型权重！预测结果将完全随机！\n\n报错详情: {w_err}")
+if s_err:
+    st.error(f"❌ 严重错误：无法加载数据标准化器！\n\n报错详情: {s_err}")
 
 st.divider()
 
@@ -119,16 +106,9 @@ if generate_btn:
     with st.spinner('算法正在广阔的序列空间中搜寻最优解...请稍候'):
         final_seq, final_pred, history_df = reverse_engineer_sequence(target_expr, model, scaler, seq_len=8, iterations=iterations)
         st.success("序列生成完毕！")
-
         st.subheader("🏆 最优生成结果")
         st.metric(label="生成的核苷酸序列", value=final_seq)
-
         c1, c2 = st.columns(2)
         c1.metric(label="CNN 预测表达值", value=f"{final_pred:.4f}", delta=f"偏离目标: {final_pred - target_expr:.4f}", delta_color="inverse")
         c2.metric(label="目标表达值", value=f"{target_expr:.4f}")
-
-        st.subheader("📈 序列进化轨迹")
         st.line_chart(history_df.set_index('iteration')['predicted_value'])
-
-        with st.expander("查看详细突变历史"):
-            st.dataframe(history_df)
