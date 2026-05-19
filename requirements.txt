@@ -1,5 +1,10 @@
 streamlit
-tensorflow
+tensorflow-cpu==2.15.0
+keras==2.15.0
 pandas
 numpy
 scikit-learn
+shap
+matplotlib
+seaborn
+scipy
