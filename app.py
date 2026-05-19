@@ -1,55 +1,42 @@
 import streamlit as st
+import numpy as np
+import pandas as pd
 import random
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv1D, Dropout, Flatten, Dense, Activation
-import numpy as np
-import pandas as pd
-import pickle 
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv1D
+import pickle
+
 
 # ==========================================
-# 1. 核心模型与数据加载模块 (完美对齐版)
+# 1. 模型初始化与加载 (复用你之前的架构)
 # ==========================================
-@st.cache_resource
-def load_core_assets():
-    # 初始化模型结构 (严格带有 name 暗号)
-    model = Sequential()
-    model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
-    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
-    model.add(Dropout(0.3, name='dropout1'))
-    model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
-    model.add(Dropout(0.3, name='dropout2'))
-    model.add(Flatten(name='flatten'))
-    model.add(Dense(256, name='dense'))
-    model.add(Activation('relu', name='relu'))
-    model.add(Dropout(0.3, name='dropout3'))
-    model.add(Dense(1, name='dense2'))
-    model.add(Activation('linear', name='linear'))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+@st.cache_resource  # 缓存模型，避免每次点击都重新加载
+def load_surrogate_model():
+    def init_model():
+        model = Sequential()
+        # 这里严格加上了你训练时的 name 暗号，以适应云端严格的读取规则
+        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
+        model.add(Dropout(0.3, name='dropout1'))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
+        model.add(Dropout(0.3, name='dropout2'))
+        model.add(Flatten(name='flatten'))
+        model.add(Dense(256, activation='relu', name='dense'))
+        model.add(Dropout(0.3, name='dropout3'))
+        model.add(Dense(1, activation='linear', name='dense2'))
+        model.compile(loss='mean_squared_error', optimizer='adam')
+        return model
 
-    # 加载权重
+    model = init_model()
+    # 请确保同目录下有你保存的权重文件和标准化文件
     try:
         model.load_weights('shap_model.weights.h5')
+        scaler = pickle.load(open('scaler.pkl', 'rb'))
     except Exception as e:
-        print(f"权重加载异常: {e}")
-
-    # 加载 Scaler
-    try:
-        with open('scaler.pkl', 'rb') as f:
-            scaler = pickle.load(f)
-    except Exception as e:
-        print(f"Scaler加载异常: {e}")
+        st.warning(f"未能加载模型权重或Scaler，当前使用未训练的初始化权重演示: {e}")
         scaler = None
-        
     return model, scaler
-
-# 统一执行加载
-model, scaler = load_core_assets()
-
-# ==========================================
-# 2. 网页前端 UI 模块 (保留你原来的代码)
-# ==========================================
-# (这里紧接着你原来的 st.title('🧬 5\'UTR 表达强度逆向设计系统') 以及后续的网页代码...)
 
 
 # 辅助函数：序列转 One-hot
@@ -121,12 +108,15 @@ st.title("🧬 5'UTR 表达强度逆向设计系统")
 st.markdown(
     "基于 CNN 代理模型与定向进化算法，输入预期的蛋白表达分数，智能生成对应的核苷酸序列。模型会自动遵循底层序列语法（如 bS1 结合 Motif）。")
 
+# 加载模型
+model, scaler = load_surrogate_model()
+
 st.divider()
 
 # 用户输入区域
 col1, col2 = st.columns(2)
 with col1:
-    target_expr = st.number_input("🎯 设定预期的表达强度 (Target Value)", value=2.0, step=0.1)
+    target_expr = st.number_input("🎯 设定预期的表达强度 (Target Value)", value=200000.0, step=1000.0)
 with col2:
     iterations = st.slider("🔄 进化迭代次数 (Iterations)", min_value=100, max_value=2000, value=500, step=100)
 
