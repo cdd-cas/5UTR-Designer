@@ -1,6 +1,5 @@
 streamlit
-tensorflow-cpu==2.15.0
-keras==2.15.0
+tensorflow-cpu
 pandas
 numpy
 scikit-learn
