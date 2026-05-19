@@ -9,33 +9,39 @@ import pickle
 
 
 # ==========================================
-# 1. 模型初始化与加载 (复用你之前的架构)
+# 1. 模型初始化与加载 (坚决不用自定义name，还原原始结构)
 # ==========================================
-@st.cache_resource  # 缓存模型，避免每次点击都重新加载
+@st.cache_resource
 def load_surrogate_model():
     def init_model():
         model = Sequential()
-        # 这里严格加上了你训练时的 name 暗号，以适应云端严格的读取规则
-        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3, name='conv1'))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv2'))
-        model.add(Dropout(0.3, name='dropout1'))
-        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3, name='conv3'))
-        model.add(Dropout(0.3, name='dropout2'))
-        model.add(Flatten(name='flatten'))
-        model.add(Dense(256, activation='relu', name='dense'))
-        model.add(Dropout(0.3, name='dropout3'))
-        model.add(Dense(1, activation='linear', name='dense2'))
+        # 还原为你本地绝对正确的原始结构，没有任何多余的 name
+        model.add(Conv1D(activation="relu", input_shape=(8, 4), padding='same', filters=256, kernel_size=3))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
+        model.add(Dropout(0.3))
+        model.add(Conv1D(activation="relu", padding='same', filters=256, kernel_size=3))
+        model.add(Dropout(0.3))
+        model.add(Flatten())
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(0.3))
+        model.add(Dense(1, activation='linear'))
         model.compile(loss='mean_squared_error', optimizer='adam')
         return model
 
     model = init_model()
-    # 请确保同目录下有你保存的权重文件和标准化文件
+    
+    # 拆分加载逻辑，明确抛出红色报错，绝不默默运行
     try:
         model.load_weights('shap_model.weights.h5')
+    except Exception as e:
+        st.error(f"❌ 警告：找不到模型权重或加载失败！详情: {e}")
+        
+    try:
         scaler = pickle.load(open('scaler.pkl', 'rb'))
     except Exception as e:
-        st.warning(f"未能加载模型权重或Scaler，当前使用未训练的初始化权重演示: {e}")
+        st.error(f"❌ 警告：找不到 Scaler 或加载失败！详情: {e}")
         scaler = None
+        
     return model, scaler
 
 
